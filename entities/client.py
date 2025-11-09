@@ -1,0 +1,225 @@
+import random
+from typing import List, Tuple, Optional
+from enum import Enum
+from pathfinding import a_star
+import itertools
+
+_next_id = itertools.count(1)
+
+class CellType(Enum):
+    AISLE = "aisle"
+    SHELF = "shelf"
+    CHECKOUT = "checkout"
+    ENTRANCE = "entrance"
+    EXIT = "exit"
+    OBSTACLE = "obstacle"
+
+
+class Client:
+    """
+    Agente que se mueve por el mapa, tiene lista de compras y comportamiento simple.
+    """
+    _id_counter = 0
+
+    def __init__(self, patience: float, tipo: str, velocidad: str):
+        # parametros básicos
+        if not (0 <= patience <= 1):
+            raise ValueError("patience must be between 0 and 1")
+        if tipo not in ['familia', 'solo']:
+            raise ValueError("tipo debe ser 'familia' o 'solo'")
+        if velocidad not in ['Rapido', 'Normal', 'Tranquilo']:
+            raise ValueError("velocidad debe ser 'Rapido', 'Normal' o 'Tranquilo'")
+
+        self.id = next(_next_id)
+        self.patience = patience
+        self.tipo = tipo
+        self.velocidad = velocidad
+        # decide delay entre movimientos (ticks)
+        self.symbol = f"C{self.id}"
+        self.position = None
+        self.move_delay = {'Rapido': 1, 'Normal': 2, 'Tranquilo': 3}[velocidad]
+        self._delay_counter = 0
+
+        self.lista: List[Tuple[str, int, Tuple[int, int]]] = []  # (cat, pid, pos)
+        self.pos: Optional[Tuple[int, int]] = None
+        self.target: Optional[Tuple[int, int]] = None
+        self.path: Optional[List[Tuple[int, int]]] = None
+        self.shopping_done = False
+        self.in_queue = False
+        self.time_waited = 0
+
+    def assign_list(self, store_map):
+        products = store_map.get_products()
+        if not products:
+            self.lista = []
+            return
+        # número de items basado en tipo
+        if self.tipo == 'familia':
+            num = random.randint(8, 14)
+        else:
+            num = max(1, min(10, int(random.gauss(5, 2))))
+        num = min(num, len(products))
+        picks = random.sample(products, num)
+        # products are (cat, id, pos)
+        self.lista = picks
+
+    def observe_environment(self, store_map):
+        # información resumida (vecinos y ocupación)
+        r, c = self.pos
+        neighbors = store_map.get_neighbors(r, c)
+        occ = store_map.get_map_status()["occupancy"]
+        return {"neighbors": neighbors, "occupancy": occ}
+
+    def choose_next_target(self, store_map):
+        # si tiene lista, elegir el producto más cercano (por Manhattan) entre los que quedan
+        if not self.lista:
+            # si no hay lista, objetivo: checkout nearest
+            chk = store_map.find_nearest_checkout(*self.pos)
+            self.target = chk
+            return self.target
+        # elegir el producto en lista más cercano
+        min_d = None
+        chosen = None
+        for (cat, pid, pos) in self.lista:
+            d = abs(pos[0] - self.pos[0]) + abs(pos[1] - self.pos[1])
+            if min_d is None or d < min_d:
+                min_d = d
+                chosen = pos
+        self.target = chosen
+        return self.target
+
+
+    def plan_path(self, store_map):
+        """
+        Planea un camino hacia el objetivo actual.
+        Si el objetivo es una shelf, el cliente planea hasta una celda adyacente accesible según su dirección.
+        """
+        if self.target is None or self.pos is None:
+            self.path = None
+            return None
+
+        target_cell = store_map.get_cell(*self.target)
+
+        # --- Caso 1: objetivo es una shelf ---
+        if target_cell and target_cell.type == CellType.SHELF:
+            shelf_pos = self.target
+            shelf_dir = target_cell.direction
+
+            # Buscar camino hasta una celda adyacente accesible (según dirección)
+            path = a_star(
+                grid=store_map.grid,
+                start=self.pos,
+                goal=shelf_pos,
+                is_walkable=lambda cell: cell.type not in {CellType.OBSTACLE, CellType.SHELF},
+                target_shelf=(shelf_pos, shelf_dir)
+            )
+
+        # --- Caso 2: objetivo normal (checkout, salida, entrada, etc.) ---
+        else:
+            path = a_star(
+                grid=store_map.grid,
+                start=self.pos,
+                goal=self.target,
+                is_walkable=lambda cell: cell.type not in {CellType.OBSTACLE, CellType.SHELF}
+            )
+
+        self.path = path or []
+        return self.path
+
+
+    def move_one_step(self, store_map) -> bool:
+        """
+        Se mueve un paso en la ruta planificada si el siguiente paso está libre.
+        Retorna True si se movió.
+        """
+        # control de velocidad por ticks
+        if self._delay_counter < self.move_delay - 1:
+            self._delay_counter += 1
+            return False
+        self._delay_counter = 0
+
+        if not self.path:
+            return False
+        next_pos = self.path[0]
+        # intentar mover via store_map.move_client (que verifica capacidad)
+        moved = store_map.move_client(self, self.pos, next_pos)
+        if moved:
+            # consumir paso en path
+            self.path.pop(0)
+            return True
+        else:
+            # si no puede moverse (celda ocupada), intentar re-planificar ocasionalmente
+            if random.random() < 0.2:
+                self.plan_path(store_map)
+            return False
+
+    def attempt_purchase(self, store_map):
+        """
+        Si está sobre una estantería y el producto está en lista, lo compra.
+        """
+        cell = store_map.get_cell(*self.pos)
+        if cell.type != CellType.SHELF:
+            return False
+        # buscar coincidencia por posición
+        for idx, (cat, pid, pos) in enumerate(self.lista):
+            if pos == self.pos:
+                # "comprar": eliminar de la lista
+                self.lista.pop(idx)
+                return True
+        return False
+
+    def decide_next_action(self, store_map):
+        """
+        Lógica por frame:
+        - si en queue: aumentar time_waited
+        - si path vacío y no target: elegir target y plan
+        - intentar moverse
+        - si en shelf: comprar
+        - si lista vacía y no en queue: dirigirse a checkout
+        """
+        if self.shopping_done:
+            return
+
+        if self.in_queue:
+            self.time_waited += 1
+            # simplified: if reaches front of queue and checkout processes it,
+            # Simulation will mark client as finished by removing from queue and moving to EXIT.
+            return
+
+        # if no position assigned yet -> nothing to do (placement handled externally)
+        if self.pos is None:
+            return
+
+        # choose target if none
+        if self.target is None:
+            self.choose_next_target(store_map)
+            self.plan_path(store_map)
+
+        # if arrived at target
+        if self.target == self.pos:
+            # if shelf -> attempt purchase
+            cell = store_map.get_cell(*self.pos)
+            if cell.type == CellType.SHELF:
+                bought = self.attempt_purchase(store_map)
+                if bought:
+                    # reset target
+                    self.target = None
+                    self.path = None
+                    if not self.lista:
+                        # go to checkout
+                        chk = store_map.find_nearest_checkout(*self.pos)
+                        self.target = chk
+                        self.plan_path(store_map)
+                    return
+            # if checkout and in queue handled elsewhere
+        # else try move
+        moved = self.move_one_step(store_map)
+        if moved:
+            # if reached and it's a shelf -> attempt to buy immediately
+            if self.target == self.pos:
+                self.attempt_purchase(store_map)
+            # if reached checkout cell (queue) `move_client` sets in_queue True
+        return
+
+    def mark_finished(self):
+        self.shopping_done = True

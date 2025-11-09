@@ -1,0 +1,46 @@
+{
+    ".": {
+        "type": "AISLE",
+        "capacity": 4
+    },
+    "#": {
+        "type": "AISLE",
+        "capacity": 6
+    },
+    "L": {
+        "type": "SHELF",
+        "cat": "Lácteos",
+        "id": 100,
+        "dir": "RIGHT"
+    },
+    "l": {
+        "type": "SHELF",
+        "cat": "Lácteos",
+        "id": 101,
+        "dir": "LEFT"
+    },
+    "B": {
+        "type": "SHELF",
+        "cat": "Bebidas",
+        "id": 200,
+        "dir": "RIGHT"
+    },
+    "b": {
+        "type": "SHELF",
+        "cat": "Bebidas",
+        "id": 201,
+        "dir": "LEFT"
+    },
+    "P": {
+        "type": "SHELF",
+        "cat": "Pan",
+        "id": 300,
+        "dir": "UP"
+    },
+    "p": {
+        "type": "SHELF",
+        "cat": "Pan",
+        "id": 301,
+        "dir": "DOWN"
+    }
+}
