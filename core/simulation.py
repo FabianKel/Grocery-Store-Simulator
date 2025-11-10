@@ -43,6 +43,7 @@ class Simulation:
                     if timer <= 0:
                         # service customer: dequeue and move to EXIT (nearest)
                         served = cell.queue.pop(0)
+                        print(f"[Simulation] Serving client {getattr(served, 'id', None)} at checkout {(i, j)}")
                         # place served client to exit cell if possible
                         exit_pos = self._find_exit_or_entrance()
                         if exit_pos:
@@ -54,9 +55,6 @@ class Simulation:
                                 served.finish_tick = self.tick
                             except Exception:
                                 served.finish_tick = None
-                            # remove client from anywhere and place at exit (no capacity handling for exit)
-                            # Note: ensure they aren't duplicated in clients lists in cells
-                            # Place at exit cell
                             self.map.place_client(served, exit_pos)
                         # reset timer
                         self.checkout_timers[key] = self.checkout_service_time

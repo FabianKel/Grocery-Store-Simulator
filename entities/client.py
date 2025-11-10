@@ -1,18 +1,10 @@
 import random
 from typing import List, Tuple, Optional
-from enum import Enum
 from pathfinding import a_star
 import itertools
+from entities.cell import CellType, Direction
 
 _next_id = itertools.count(1)
-
-class CellType(Enum):
-    AISLE = "aisle"
-    SHELF = "shelf"
-    CHECKOUT = "checkout"
-    ENTRANCE = "entrance"
-    EXIT = "exit"
-    OBSTACLE = "obstacle"
 
 
 class Client:
@@ -105,14 +97,40 @@ class Client:
             shelf_pos = self.target
             shelf_dir = target_cell.direction
 
-            # Buscar camino hasta una celda adyacente accesible (según dirección)
-            path = a_star(
-                grid=store_map.grid,
-                start=self.pos,
-                goal=shelf_pos,
-                is_walkable=lambda cell: cell.type not in {CellType.OBSTACLE, CellType.SHELF},
-                target_shelf=(shelf_pos, shelf_dir)
-            )
+            # Si la estantería no tiene dirección definida, permitir acceso desde cualquier lado.
+            if shelf_dir is None or shelf_dir == Direction.NONE:
+                # probar caminos a cada celda adyacente válida y escoger el más corto
+                neighbors = store_map.get_neighbors(shelf_pos[0], shelf_pos[1])
+                best_path = None
+                best_nb = None
+                for nb in neighbors:
+                    path = a_star(
+                        grid=store_map.grid,
+                        start=self.pos,
+                        goal=nb,
+                        is_walkable=lambda cell: cell.type not in {CellType.OBSTACLE, CellType.SHELF}
+                    )
+                    if path:
+                        if best_path is None or len(path) < len(best_path):
+                            best_path = path
+                            best_nb = nb
+                path = best_path
+                # if we found a path to an adjacent cell, set the target to that adjacent cell
+                if best_nb is not None:
+                    self.target = best_nb
+            else:
+                # Buscar camino hasta una celda adyacente accesible (según dirección)
+                path = a_star(
+                    grid=store_map.grid,
+                    start=self.pos,
+                    goal=shelf_pos,
+                    is_walkable=lambda cell: cell.type not in {CellType.OBSTACLE, CellType.SHELF},
+                    target_shelf=(shelf_pos, shelf_dir)
+                )
+                # if A* returned a path to an adjacent access cell, update the target
+                if path:
+                    # path[-1] is the reachable adjacent cell
+                    self.target = path[-1]
 
         # --- Caso 2: objetivo normal (checkout, salida, entrada, etc.) ---
         else:
@@ -124,6 +142,7 @@ class Client:
             )
 
         self.path = path or []
+        print(f"[Client {self.id}] plan_path target={self.target} computed_path={self.path}")
         return self.path
 
 
@@ -158,14 +177,26 @@ class Client:
         Si está sobre una estantería y el producto está en lista, lo compra.
         """
         cell = store_map.get_cell(*self.pos)
-        if cell.type != CellType.SHELF:
+        # Si está exactamente en la shelf, comprar por posición
+        if cell.type == CellType.SHELF:
+            for idx, (cat, pid, pos) in enumerate(self.lista):
+                if pos == self.pos:
+                    # "comprar": eliminar de la lista
+                    self.lista.pop(idx)
+                    print(f"[Client {self.id}] bought item at shelf {pos}; items_left={len(self.lista)}")
+                    return True
             return False
-        # buscar coincidencia por posición
-        for idx, (cat, pid, pos) in enumerate(self.lista):
-            if pos == self.pos:
-                # "comprar": eliminar de la lista
-                self.lista.pop(idx)
-                return True
+
+        # Si no está sobre la estantería, permitir compra desde una celda adyacente
+        neighbors = store_map.get_neighbors(self.pos[0], self.pos[1])
+        for nb in neighbors:
+            ncell = store_map.get_cell(*nb)
+            if ncell and ncell.type == CellType.SHELF:
+                for idx, (cat, pid, pos) in enumerate(self.lista):
+                    if pos == nb:
+                        self.lista.pop(idx)
+                        print(f"[Client {self.id}] bought item from adjacent shelf {nb}; items_left={len(self.lista)}")
+                        return True
         return False
 
     def decide_next_action(self, store_map):
@@ -193,6 +224,7 @@ class Client:
         # choose target if none
         if self.target is None:
             self.choose_next_target(store_map)
+            print(f"[Client {self.id}] chose target={self.target}")
             self.plan_path(store_map)
 
         # if arrived at target
@@ -215,9 +247,18 @@ class Client:
         # else try move
         moved = self.move_one_step(store_map)
         if moved:
-            # if reached and it's a shelf -> attempt to buy immediately
+            # if reached and it's a shelf or adjacent access -> attempt to buy immediately
             if self.target == self.pos:
-                self.attempt_purchase(store_map)
+                bought = self.attempt_purchase(store_map)
+                if bought:
+                    # reset target/path and head to checkout if list is empty
+                    self.target = None
+                    self.path = None
+                    if not self.lista:
+                        chk = store_map.find_nearest_checkout(*self.pos)
+                        self.target = chk
+                        self.plan_path(store_map)
+                    return
             # if reached checkout cell (queue) `move_client` sets in_queue True
         return
 

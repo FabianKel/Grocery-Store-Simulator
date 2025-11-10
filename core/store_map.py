@@ -132,6 +132,7 @@ class StoreMap:
             if client in from_cell.clients:
                 from_cell.remove_client(client)
             to_cell.queue.append(client)
+            print(f"[StoreMap] Client {getattr(client,'id',None)} joined checkout queue at {to_pos}")
             client.pos = to_pos
             client.in_queue = True
             return True

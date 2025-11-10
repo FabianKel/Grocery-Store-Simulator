@@ -113,8 +113,20 @@
             <!-- Full-width console + leaderboard panel placed below the main grid -->
             <div class="panel full-width-panel">
                 <h2>Consola (mapa textual)</h2>
-                <pre id="console-map" class="console-pre">-- Aquí se mostrará el mapa textual --</pre>
+                <div class="console-wrap" style="position:relative">
+                    <pre id="console-map" class="console-pre">-- Aquí se mostrará el mapa textual --</pre>
+                    <div class="console-controls" aria-hidden="true">
+                        <button id="console-scroll-left" title="Desplazar izquierda">◀</button>
+                        <button id="console-scroll-right" title="Desplazar derecha">▶</button>
+                    </div>
+                    <!-- vertical controls (up/down) for environments that hide scrollbars -->
+                    <div class="console-controls-vertical" aria-hidden="true">
+                        <button id="console-scroll-up" title="Desplazar arriba">▲</button>
+                        <button id="console-scroll-down" title="Desplazar abajo">▼</button>
+                    </div>
+                </div>
                 <h2 style="margin-top:16px;">Leaderboard / Tiempos de clientes</h2>
+                <div style="font-size:13px; color:#555; margin-bottom:6px">(*) Valores en segundos</div>
                 <div id="client-metrics">
                     <table id="client-metrics-table" style="width:100%; border-collapse:collapse;">
                         <thead>
@@ -130,6 +142,23 @@
                         </thead>
                         <tbody></tbody>
                     </table>
+                </div>
+
+                <!-- Charts -->
+                <div id="client-chart-wrap" style="margin-top:12px; display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap;">
+                    <div style="flex:1; min-width:320px">
+                        <canvas id="client-times-chart" width="640" height="240" style="background:#fff; border:1px solid #e6e6e6; border-radius:6px;"></canvas>
+                        <div style="font-size:13px; color:#444; margin-top:6px">Gráfico A: tiempo total por cliente (segundos). La etiqueta entre paréntesis muestra el número de items que llevaba cada cliente.</div>
+                    </div>
+
+                    <div style="flex:1; min-width:320px">
+                        <canvas id="items-vs-time-chart" width="640" height="240" style="background:#fff; border:1px solid #e6e6e6; border-radius:6px;"></canvas>
+                        <div style="font-size:13px; color:#444; margin-top:6px">Gráfico B: relación Items vs Tiempo — cada punto representa un cliente (x = items, y = segundos).</div>
+                    </div>
+                    
+                                    <div style="width:100%; margin-top:8px;">
+                                        <div style="font-size:13px; color:#333; background:#fbfbfb; padding:8px; border-radius:6px; border:1px solid #eee">Nota: los gráficos se guardarán automáticamente en el servidor (carpeta <code>static/exports</code>) cuando finalice la simulación.</div>
+                                    </div>
                 </div>
 
                 <!-- Raw JSON inspector for client_metrics (helps debug without DevTools) -->

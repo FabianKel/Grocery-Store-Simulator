@@ -1,24 +1,12 @@
 import heapq
-from enum import Enum
-
-class Direction(Enum):
-    UP = (-1, 0)
-    DOWN = (1, 0)
-    LEFT = (0, -1)
-    RIGHT = (0, 1)
-    NONE = (0, 0)
-
-class CellType(Enum):
-    AISLE = "aisle"
-    SHELF = "shelf"
-    CHECKOUT = "checkout"
-    ENTRANCE = "entrance"
-    EXIT = "exit"
-    OBSTACLE = "obstacle"
 
 
 def can_access_shelf(client_pos, shelf_pos, shelf_direction):
-    """Verifica si el cliente puede acceder a una shelf desde su dirección permitida."""
+    """Verifica si el cliente puede acceder a una shelf desde su dirección permitida.
+    shelf_direction is expected to be entities.cell.Direction.
+    """
+    # local import to avoid circular dependency at module import time
+    from entities.cell import Direction
     cr, cc = client_pos
     sr, sc = shelf_pos
 
@@ -31,9 +19,6 @@ def can_access_shelf(client_pos, shelf_pos, shelf_direction):
     elif shelf_direction == Direction.RIGHT:
         return (cr == sr and cc == sc + 1)  # derecha
     return False
-
-
-import heapq
 
 def heuristic(a, b):
     """Distancia Manhattan entre dos puntos (r1, c1) y (r2, c2)."""
@@ -63,7 +48,9 @@ def a_star(grid, start, goal, is_walkable, target_shelf=None):
         if not (0 <= nr < rows and 0 <= nc < cols):
             return False
         cell = grid[nr][nc]
-        # No atravesar shelves ni obstáculos
+        # No atravesar shelves ni obstáculos (cell.type is entities.cell.CellType)
+        # local import to avoid circular import at module load
+        from entities.cell import CellType
         if cell.type in (CellType.OBSTACLE, CellType.SHELF):
             return False
         return is_walkable(cell)

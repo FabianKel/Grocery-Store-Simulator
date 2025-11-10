@@ -1,7 +1,8 @@
 from enum import Enum
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, TYPE_CHECKING
 import os
-from entities.client import Client
+if TYPE_CHECKING:
+    from entities.client import Client
 
 
 class CellType(Enum):

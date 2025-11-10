@@ -71,7 +71,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important;
 .console-panel { grid-column: 3 / 4; padding: 18px; }
 
 /* Console pre styling moved to CSS for consistency and responsiveness */
-.console-pre { height: 260px; overflow-x: auto; overflow-y: auto; -ms-overflow-style: scrollbar; background: #0f172a; color: #e6eef8; padding: 12px 18px 12px 12px; border-radius: 8px; font-family: 'Courier New', monospace; font-size: 13px; white-space: pre; box-sizing: border-box; width: 100%; position: relative; }
+.console-pre { height: 260px; overflow: auto; -ms-overflow-style: scrollbar; scrollbar-gutter: stable both-edges; background: #0f172a; color: #e6eef8; padding: 12px 18px 12px 12px; border-radius: 8px; font-family: 'Courier New', monospace; font-size: 13px; white-space: pre; box-sizing: border-box; width: 100%; position: relative; }
 
 /* Make scrollbars visible and styled for better discoverability */
 .console-pre, .raw-pre {
@@ -85,10 +85,11 @@ button:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important;
 	width: 12px;
 }
 .console-pre::-webkit-scrollbar-thumb, .raw-pre::-webkit-scrollbar-thumb {
-	background: rgba(255,255,255,0.30); /* stronger contrast */
+	background: rgba(255,255,255,0.75); /* high contrast for Chrome */
 	border-radius: 6px;
-	border: 2px solid rgba(0,0,0,0.0);
+	border: 2px solid rgba(0,0,0,0.08);
 	background-clip: padding-box;
+	box-shadow: 0 0 0 1px rgba(255,255,255,0.02) inset;
 }
 .console-pre::-webkit-scrollbar-track, .raw-pre::-webkit-scrollbar-track {
 	background: rgba(255,255,255,0.02);
@@ -96,6 +97,21 @@ button:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important;
 
 /* Firefox scrollbar color */
 .console-pre, .raw-pre { scrollbar-width: auto; scrollbar-color: rgba(255,255,255,0.30) rgba(255,255,255,0.02); }
+
+/* Console overlay controls (left/right) */
+.console-wrap { position: relative; }
+.console-controls { position: absolute; right: 8px; top: 8px; display: flex; gap: 6px; z-index: 30; }
+.console-controls button { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.06); color: #e6eef8; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-weight: 700; backdrop-filter: blur(4px); }
+.console-controls button:hover { background: rgba(255,255,255,0.12); }
+.console-controls button:active { transform: translateY(1px); }
+.console-controls[aria-hidden="true"] { display: none; }
+
+/* Vertical controls on the left (up/down) */
+.console-controls-vertical { position: absolute; left: 8px; top: 8px; display: flex; flex-direction: column; gap: 6px; z-index: 30; }
+.console-controls-vertical button { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.06); color: #e6eef8; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-weight: 700; backdrop-filter: blur(4px); }
+.console-controls-vertical button:hover { background: rgba(255,255,255,0.12); }
+.console-controls-vertical button:active { transform: translateY(1px); }
+.console-controls-vertical[aria-hidden="true"] { display: none; }
 
 /* Responsive tweaks: on narrow screens stack layout vertically and shrink console */
 @media (max-width: 900px) {

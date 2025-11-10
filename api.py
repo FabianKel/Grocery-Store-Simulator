@@ -12,6 +12,9 @@ from core.store_map import StoreMap
 from entities.client import Client
 from core.simulation import Simulation
 from entities.cell import CellType
+import os
+import base64
+from datetime import datetime
 
 app = FastAPI(title="Grocery Store Simulator")
 
@@ -202,6 +205,33 @@ async def get_interface():
 # montar archivos estáticos
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+
+@app.post("/api/save_gift")
+async def save_gift(payload: dict):
+    """Recibe un dataURL PNG en JSON y lo guarda en disk en static/exports.
+    payload: { "filename": "optional.png", "data_url": "data:image/png;base64,..." }
+    """
+    try:
+        data_url = payload.get('data_url')
+        filename = payload.get('filename') or f"sim_gift_{int(datetime.utcnow().timestamp())}.png"
+        if not data_url or not data_url.startswith('data:image/png;base64,'):
+            return {"error": "invalid data_url"}
+
+        # ensure exports dir exists
+        exports_dir = os.path.join('static', 'exports')
+        os.makedirs(exports_dir, exist_ok=True)
+
+        b64 = data_url.split(',', 1)[1]
+        data = base64.b64decode(b64)
+        safe_name = os.path.basename(filename)
+        path = os.path.join(exports_dir, safe_name)
+        with open(path, 'wb') as f:
+            f.write(data)
+
+        return {"saved": path}
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.websocket("/ws/simulate")
 async def websocket_simulate(websocket: WebSocket):
     await websocket.accept()
@@ -315,7 +345,13 @@ async def websocket_simulate(websocket: WebSocket):
                         print(f"[tick {sim.tick}] console_map: <none>")
                 except Exception:
                     pass
-                await websocket.send_text(json.dumps(state))
+                try:
+                    await websocket.send_text(json.dumps(state))
+                except Exception as e:
+                    # Client disconnected or send failed; stop the simulation loop
+                    print(f"WebSocket send failed at tick {sim.tick}: {e}")
+                    stopped = True
+                    break
             else:
                 # still send current state occasionally so UI can show paused tick
                 state = serialize_simulation_state(sim)
@@ -334,7 +370,12 @@ async def websocket_simulate(websocket: WebSocket):
                         print(f"[tick {sim.tick}] console_map (paused): <none>")
                 except Exception:
                     pass
-                await websocket.send_text(json.dumps(state))
+                try:
+                    await websocket.send_text(json.dumps(state))
+                except Exception as e:
+                    print(f"WebSocket send failed while paused at tick {sim.tick}: {e}")
+                    stopped = True
+                    break
 
             # esperar por tick_delay o hasta que haya un comando nuevo
             try:
@@ -346,26 +387,30 @@ async def websocket_simulate(websocket: WebSocket):
                 pass
 
         # Enviar estado final
-        try:
-            final_state = serialize_simulation_state(sim)
             try:
-                cm = final_state.get('client_metrics', [])
-                print(f"[final tick {sim.tick}] client_metrics: {json.dumps(cm, ensure_ascii=False)}")
+                final_state = serialize_simulation_state(sim)
+                try:
+                    cm = final_state.get('client_metrics', [])
+                    print(f"[final tick {sim.tick}] client_metrics: {json.dumps(cm, ensure_ascii=False)}")
+                except Exception:
+                    pass
+                try:
+                    cmap = final_state.get('console_map')
+                    if cmap:
+                        lines = cmap.splitlines()
+                        snippet = lines[0] if lines else ''
+                        print(f"[final tick {sim.tick}] console_map lines={len(lines)} snippet='{snippet[:80]}'")
+                    else:
+                        print(f"[final tick {sim.tick}] console_map: <none>")
+                except Exception:
+                    pass
+                try:
+                    final_state['final'] = True
+                    await websocket.send_text(json.dumps(final_state))
+                except Exception as e:
+                    print(f"Final WebSocket send failed: {e}")
             except Exception:
                 pass
-            try:
-                cmap = final_state.get('console_map')
-                if cmap:
-                    lines = cmap.splitlines()
-                    snippet = lines[0] if lines else ''
-                    print(f"[final tick {sim.tick}] console_map lines={len(lines)} snippet='{snippet[:80]}'")
-                else:
-                    print(f"[final tick {sim.tick}] console_map: <none>")
-            except Exception:
-                pass
-            await websocket.send_text(json.dumps(final_state))
-        except Exception:
-            pass
 
         # cerrar reader task
         reader_task.cancel()
@@ -374,7 +419,11 @@ async def websocket_simulate(websocket: WebSocket):
         print("Cliente desconectado")
     except Exception as e:
         print(f"Error: {e}")
-        await websocket.close()
+        # Try to close websocket gracefully if still open
+        try:
+            await websocket.close()
+        except Exception:
+            pass
 
 @app.get("/api/config/defaults")
 async def get_defaults():

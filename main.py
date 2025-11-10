@@ -86,7 +86,7 @@ def run_demo():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run Grocery Store Simulator (server or demo)")
     parser.add_argument('--demo', action='store_true', help='Run local demo simulation instead of starting the server')
-    parser.add_argument('--host', default='0.0.0.0', help='Host for server (uvicorn)')
+    parser.add_argument('--host', default='127.0.0.1', help='Host for server (uvicorn)')
     parser.add_argument('--port', type=int, default=8000, help='Port for server (uvicorn)')
     args = parser.parse_args()
 
