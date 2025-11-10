@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Supermercado</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <img src="/static/super.png" alt="Simulación Supermercado" style="width:100%; height:auto; display:block; border-radius:12px 12px 0 0;">
+        </header>
+        
+        <div class="main-content">
+            <div class="panel">
+                <h2>Configuración</h2>
+                <div class="controls">
+                    <div class="control-group">
+                        <label>Filas del mapa</label>
+                        <input type="number" id="rows" min="5" max="30" value="10">
+                    </div>
+                    <div class="control-group">
+                        <label>Columnas del mapa</label>
+                        <input type="number" id="cols" min="5" max="30" value="12">
+                    </div>
+                    <div class="control-group">
+                        <label>Número de clientes</label>
+                        <div class="client-controls">
+                            <input type="number" id="num_clients" min="0" max="50" value="5">
+                            <button id="addClientBtn" class="btn-success">+</button>
+                        </div>
+                        <div id="client-list-ui"></div>
+                    </div>
+                    <div class="control-group">
+                        <label>Velocidad (segundos/tick)</label>
+                        <input type="number" id="tick_delay" min="0.05" max="2" step="0.05" value="0.5">
+                    </div>
+                    <div class="control-group">
+                        <label>Máximo de ticks</label>
+                        <input type="number" id="max_ticks" min="10" max="2000" value="100">
+                    </div>
+                    <div class="button-group">
+                        <button id="startBtn" class="btn-primary">▶ Iniciar</button>
+                        <button id="pauseBtn" class="btn-secondary" disabled>⏸ Pausar</button>
+                        <button id="stepBtn" class="btn-secondary" disabled>⏭ Paso</button>
+                        <button id="stopBtn" class="btn-danger" disabled>⏹ Detener</button>
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <div id="simulation-canvas">
+                    <p>Configura los parámetros y presiona "Iniciar" para comenzar la simulación</p>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2>Estadísticas</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="tick-count">0</div>
+                        <div class="stat-label">Tick actual</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="active-count">0</div>
+                        <div class="stat-label">Clientes activos</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="shopping-count">0</div>
+                        <div class="stat-label">Comprando</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="queue-count">0</div>
+                        <div class="stat-label">En fila</div>
+                    </div>
+                </div>
+                
+                <h2 style="margin-top: 24px;">Leyenda</h2>
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #10b981;"></div>
+                        <span class="legend-text">Entrada</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #ef4444;"></div>
+                        <span class="legend-text">Salida</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #f59e0b;"></div>
+                        <span class="legend-text">Estantería</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #3b82f6;"></div>
+                        <span class="legend-text">Caja registradora</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #e2e8f0;"></div>
+                        <span class="legend-text">Pasillo</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #f5576c; border-radius: 50%;"></div>
+                        <span class="legend-text">Cliente individual</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #8b5cf6; border-radius: 50%;"></div>
+                        <span class="legend-text">Cliente familiar</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+            <!-- Full-width console + leaderboard panel placed below the main grid -->
+            <div class="panel full-width-panel">
+                <h2>Consola (mapa textual)</h2>
+                <pre id="console-map" class="console-pre">-- Aquí se mostrará el mapa textual --</pre>
+                <h2 style="margin-top:16px;">Leaderboard / Tiempos de clientes</h2>
+                <div id="client-metrics">
+                    <table id="client-metrics-table" style="width:100%; border-collapse:collapse;">
+                        <thead>
+                            <tr>
+                                <th style="text-align:left; padding:6px">ID</th>
+                                <th style="text-align:left; padding:6px">Tipo</th>
+                                <th style="text-align:left; padding:6px">Velocidad</th>
+                                <th style="text-align:right; padding:6px">Items</th>
+                                <th style="text-align:right; padding:6px">Start</th>
+                                <th style="text-align:right; padding:6px">Finish</th>
+                                <th style="text-align:right; padding:6px">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+
+                <!-- Raw JSON inspector for client_metrics (helps debug without DevTools) -->
+                <details id="raw-metrics" style="margin-top:12px;">
+                    <summary style="cursor:pointer; font-weight:700;">Ver RAW client_metrics (JSON)</summary>
+                    <pre id="raw-client-metrics" class="console-pre raw-pre" style="margin-top:8px;">[]</pre>
+                </details>
+            </div>
+
+        <div class="status-bar" id="status">
+            ⏸ Simulación detenida
+        </div>
+    </div>
+    <script src="/static/app.js" defer></script>
+</body>
+</html>

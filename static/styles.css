@@ -1,0 +1,108 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+/* neutral page background so no purple shows around the container */
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f1f5f9; min-height: 100vh; padding: 20px; }
+.container { max-width: 1600px; margin: 0 auto; background: white; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); overflow: hidden; }
+/* Header/banner styling: use a neutral background so the provided banner image displays cleanly.
+	You can change --header-bg to another color if you prefer. */
+:root { --header-bg: #ffffff; }
+header { background: var(--header-bg); color: #0f172a; padding: 0; text-align: center; }
+
+/* Show the banner completely (no cropping). The image will scale to the container width
+	and keep its natural aspect ratio. If the banner is very tall, consider resizing the
+	source image to a desired height instead. */
+header img { display: block; width: 100%; height: auto; max-height: none; object-fit: contain; border-radius: 12px 12px 0 0; }
+h1 { font-size: 2.5em; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.2); }
+.subtitle { font-size: 1.1em; opacity: 0.9; }
+.main-content { display: grid; grid-template-columns: 300px 1fr 300px; gap: 20px; padding: 20px; }
+.panel { background: #f8f9fa; border-radius: 15px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+.panel h2 { color: #667eea; margin-bottom: 15px; font-size: 1.3em; border-bottom: 2px solid #667eea; padding-bottom: 10px; }
+.controls { display: flex; flex-direction: column; gap: 15px; }
+.control-group { display: flex; flex-direction: column; gap: 8px; }
+	.button-group {
+			/* make buttons stack neatly and have consistent spacing */
+			display: flex;
+			flex-direction: column;
+			gap: 12px;
+			margin-top: 12px;
+			width: 100%;
+		}
+        
+	.button-group button {
+			font-size: 0.95rem;
+			padding: 12px 16px;
+			width: 100%;
+			min-height: 44px;
+			box-sizing: border-box;
+			text-align: center;
+		}
+label { font-weight: 600; color: #333; font-size: 0.9em; }
+input, select { padding: 10px; border: 2px solid #ddd; border-radius: 8px; font-size: 1em; }
+input:focus, select:focus { outline: none; border-color: #667eea; }
+button { padding: 12px 24px; border: none; border-radius: 8px; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.18s ease; text-transform: uppercase; letter-spacing: 1px; }
+.btn-primary { background: #0ea5e9; color: white; box-shadow: none; }
+.btn-primary:hover { background: #0284c7; transform: translateY(-2px); box-shadow: 0 6px 12px rgba(2,132,199,0.12); }
+.btn-danger { background: #ef4444; color: white; box-shadow: none; }
+.btn-danger:hover { background: #dc2626; transform: translateY(-2px); box-shadow: 0 6px 12px rgba(220,38,38,0.12); }
+button:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+#simulation-canvas { background: white; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); min-height: 600px; display: flex; align-items: center; justify-content: center; }
+.stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; }
+.stat-card { background: white; padding: 15px; border-radius: 10px; border-left: 4px solid #667eea; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.stat-value { font-size: 2em; font-weight: bold; color: #667eea; }
+.stat-label { font-size: 0.85em; color: #666; margin-top: 5px; }
+.legend { display: flex; flex-direction: column; gap: 10px; }
+.legend-item { display: flex; align-items: center; gap: 10px; padding: 8px; background: white; border-radius: 8px; }
+.legend-color { width: 30px; height: 30px; border-radius: 5px; border: 2px solid #333; }
+.legend-text { font-size: 0.9em; color: #333; }
+.status-bar { background: #f8f9fa; padding: 10px 20px; text-align: center; font-weight: 600; color: #667eea; border-top: 2px solid #ddd; }
+.client-list { max-height: 400px; overflow-y: auto; }
+.client-item { background: white; padding: 12px; margin: 8px 0; border-radius: 8px; border-left: 4px solid; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.client-item.familia { border-left-color: #f5576c; }
+.client-item.solo { border-left-color: #667eea; }
+.client-info { display: flex; justify-content: space-between; margin-bottom: 5px; }
+.client-name { font-weight: bold; }
+.client-status { font-size: 0.85em; color: #666; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+.running { animation: pulse 2s infinite; }
+
+/* Panel that spans all columns inside the grid (full width) */
+.full-width-panel { grid-column: 1 / -1; padding: 22px; }
+
+/* Console panel placed in the right column next to the map */
+.console-panel { grid-column: 3 / 4; padding: 18px; }
+
+/* Console pre styling moved to CSS for consistency and responsiveness */
+.console-pre { height: 260px; overflow-x: auto; overflow-y: auto; -ms-overflow-style: scrollbar; background: #0f172a; color: #e6eef8; padding: 12px 18px 12px 12px; border-radius: 8px; font-family: 'Courier New', monospace; font-size: 13px; white-space: pre; box-sizing: border-box; width: 100%; position: relative; }
+
+/* Make scrollbars visible and styled for better discoverability */
+.console-pre, .raw-pre {
+	display: block;
+	-webkit-overflow-scrolling: touch;
+}
+
+/* WebKit (Chrome, Edge, Safari) scrollbar styling */
+.console-pre::-webkit-scrollbar, .raw-pre::-webkit-scrollbar {
+	height: 12px;
+	width: 12px;
+}
+.console-pre::-webkit-scrollbar-thumb, .raw-pre::-webkit-scrollbar-thumb {
+	background: rgba(255,255,255,0.30); /* stronger contrast */
+	border-radius: 6px;
+	border: 2px solid rgba(0,0,0,0.0);
+	background-clip: padding-box;
+}
+.console-pre::-webkit-scrollbar-track, .raw-pre::-webkit-scrollbar-track {
+	background: rgba(255,255,255,0.02);
+}
+
+/* Firefox scrollbar color */
+.console-pre, .raw-pre { scrollbar-width: auto; scrollbar-color: rgba(255,255,255,0.30) rgba(255,255,255,0.02); }
+
+/* Responsive tweaks: on narrow screens stack layout vertically and shrink console */
+@media (max-width: 900px) {
+	.main-content { grid-template-columns: 1fr; }
+	.button-group { flex-direction: row; }
+	.console-pre { height: 140px; }
+}
+
+/* slightly smaller raw JSON pre inside details to indicate it's an inspector */
+.raw-pre { max-height: 260px; font-size: 12px; background: #071423; padding: 10px; overflow: auto; white-space: pre; box-sizing: border-box; width: 100%; }

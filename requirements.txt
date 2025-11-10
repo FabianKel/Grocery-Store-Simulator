@@ -1,0 +1,6 @@
+matplotlib>=3.0
+pillow>=8.0
+numpy>=1.20
+fastapi>=0.95
+uvicorn[standard]>=0.22
+pydantic>=1.10

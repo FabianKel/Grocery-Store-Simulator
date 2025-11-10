@@ -2,6 +2,8 @@ from core.store_map import StoreMap
 from entities.client import Client
 from core.simulation import Simulation
 from entities.cell import CellType
+import argparse
+import uvicorn
 
 
 def build_example_store():
@@ -59,7 +61,7 @@ def build_example_store():
     return sm
 
 
-if __name__ == "__main__":
+def run_demo():
     store = build_example_store()
     sim = Simulation(store)
 
@@ -78,5 +80,18 @@ if __name__ == "__main__":
     sim.add_client(c2, (0, 0))
     sim.add_client(c3, (0, 0))
 
-    # Ejecutar simulación
-    sim.run(max_ticks=50, tick_delay=0.1, visualize=True)
+    sim.run(max_ticks=50, tick_delay=0.1, visualize=True, animate=True, save_animation='store_simulation.gif')
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run Grocery Store Simulator (server or demo)")
+    parser.add_argument('--demo', action='store_true', help='Run local demo simulation instead of starting the server')
+    parser.add_argument('--host', default='0.0.0.0', help='Host for server (uvicorn)')
+    parser.add_argument('--port', type=int, default=8000, help='Port for server (uvicorn)')
+    args = parser.parse_args()
+
+    if args.demo:
+        run_demo()
+    else:
+        print(f"🚀 Starting server on http://{args.host}:{args.port}")
+        uvicorn.run("api:app", host=args.host, port=args.port)

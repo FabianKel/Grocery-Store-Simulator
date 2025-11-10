@@ -233,7 +233,11 @@ class StoreMap:
                         # Mostrar capacidad ocupada (ejemplo: ".2/4")
                         cell_repr = f".{len(cell.clients)}/{cell.capacity}"
                     elif cell.type == CellType.SHELF:
-                        cell_repr = f"SL{cell.product_id:03d}"
+                        pid = getattr(cell, 'product_id', None)
+                        if isinstance(pid, int):
+                            cell_repr = f"SL{pid:03d}"
+                        else:
+                            cell_repr = "SL---"
                     elif cell.type == CellType.CHECKOUT:
                         cell_repr = "SB201"
                     elif cell.type == CellType.ENTRANCE:
@@ -246,3 +250,43 @@ class StoreMap:
                 row_repr.append(f"{cell_repr:>6}")
             print(" ".join(row_repr))
         print()
+
+    def get_console_map(self) -> str:
+        """Return the textual representation of the map as a multi-line string (same format as print_map)."""
+        lines = []
+        for i in range(self.rows):
+            row_repr = []
+            for j in range(self.cols):
+                cell = self.grid[i][j]
+
+                if cell.clients:
+                    if len(cell.clients) == 1:
+                        cl = cell.clients[0]
+                        cell_repr = f"[{cl.symbol}]"
+                    else:
+                        symbols = ",".join(cl.symbol for cl in cell.clients)
+                        cell_repr = f"[{symbols}]"
+                elif cell.type == CellType.CHECKOUT and cell.queue:
+                    queue_symbols = ",".join(cl.symbol for cl in cell.queue)
+                    cell_repr = f"Q[{queue_symbols}]"
+                else:
+                    if cell.type == CellType.AISLE:
+                        cell_repr = f".{len(cell.clients)}/{cell.capacity}"
+                    elif cell.type == CellType.SHELF:
+                        pid = getattr(cell, 'product_id', None)
+                        if isinstance(pid, int):
+                            cell_repr = f"SL{pid:03d}"
+                        else:
+                            cell_repr = "SL---"
+                    elif cell.type == CellType.CHECKOUT:
+                        cell_repr = "SB201"
+                    elif cell.type == CellType.ENTRANCE:
+                        cell_repr = "EN"
+                    elif cell.type == CellType.EXIT:
+                        cell_repr = "EX"
+                    else:
+                        cell_repr = "###"
+
+                row_repr.append(f"{cell_repr:>6}")
+            lines.append(" ".join(row_repr))
+        return "\n".join(lines)
