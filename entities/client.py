@@ -51,6 +51,9 @@ class Client:
         else:
             num = max(1, min(10, int(random.gauss(5, 2))))
         num = min(num, len(products))
+        # ensure at least one item if products are available
+        if len(products) > 0 and num < 1:
+            num = 1
         picks = random.sample(products, num)
         # products are (cat, id, pos)
         self.lista = picks

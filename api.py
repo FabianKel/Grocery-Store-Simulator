@@ -180,6 +180,7 @@ def serialize_simulation_state(sim: Simulation):
             "velocidad": getattr(c, 'velocidad', None),
             "patience": getattr(c, 'patience', None),
             "items_left": len(getattr(c, 'lista', [])) if getattr(c, 'lista', None) is not None else None,
+            "items_total": getattr(c, 'items_total', None),
             "shopping_done": getattr(c, 'shopping_done', False),
             "in_queue": getattr(c, 'in_queue', False),
             "start_tick": start,
@@ -213,15 +214,37 @@ async def save_gift(payload: dict):
     """
     try:
         data_url = payload.get('data_url')
-        filename = payload.get('filename') or f"sim_gift_{int(datetime.utcnow().timestamp())}.png"
-        if not data_url or not data_url.startswith('data:image/png;base64,'):
+        filename = payload.get('filename')
+        if not data_url or not data_url.startswith('data:image/'):
             return {"error": "invalid data_url"}
+
+        # detect mime and choose extension
+        try:
+            header, b64 = data_url.split(',', 1)
+            mime = header.split(':', 1)[1].split(';', 1)[0]
+        except Exception:
+            return {"error": "invalid data_url format"}
+
+        ext = 'png'
+        if mime == 'image/gif':
+            ext = 'gif'
+        elif mime == 'image/jpeg' or mime == 'image/jpg':
+            ext = 'jpg'
+        elif mime == 'image/png':
+            ext = 'png'
+
+        # build filename if not provided
+        if not filename:
+            filename = f"sim_gift_{int(datetime.utcnow().timestamp())}.{ext}"
+        else:
+            # ensure extension matches mime if possible
+            if not os.path.splitext(filename)[1]:
+                filename = f"{filename}.{ext}"
 
         # ensure exports dir exists
         exports_dir = os.path.join('static', 'exports')
         os.makedirs(exports_dir, exist_ok=True)
 
-        b64 = data_url.split(',', 1)[1]
         data = base64.b64decode(b64)
         safe_name = os.path.basename(filename)
         path = os.path.join(exports_dir, safe_name)
@@ -262,6 +285,11 @@ async def websocket_simulate(websocket: WebSocket):
                     except Exception:
                         pass
                 client.assign_list(store)
+                # record initial total items for metrics
+                try:
+                    client.items_total = len(client.lista)
+                except Exception:
+                    client.items_total = 0
                 sim.add_client(client, (0, 0))
         else:
             for i in range(config.get('num_clients', 5)):
@@ -271,6 +299,11 @@ async def websocket_simulate(websocket: WebSocket):
                     velocidad=random.choice(['Rapido', 'Normal', 'Tranquilo'])
                 )
                 client.assign_list(store)
+                # record initial total items for metrics
+                try:
+                    client.items_total = len(client.lista)
+                except Exception:
+                    client.items_total = 0
                 sim.add_client(client, (0, 0))
 
         # valores de control
