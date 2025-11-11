@@ -38,11 +38,13 @@ function startSimulation() {
         cols: parseInt(document.getElementById('cols').value),
         num_clients: parseInt(document.getElementById('num_clients').value),
         tick_delay: parseFloat(document.getElementById('tick_delay').value),
-        max_ticks: parseInt(document.getElementById('max_ticks').value)
+        max_ticks: parseInt(document.getElementById('max_ticks').value),
+        day: "viernes",
+        hour: 10
     };
     // attach custom clients if provided
     if (localClients.length > 0) config.clients = localClients;
-
+    console.log("AAAA")
     const canvasContainer = document.getElementById('simulation-canvas');
     canvasContainer.innerHTML = '';
     canvas = document.createElement('canvas');

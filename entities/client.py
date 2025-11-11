@@ -3,6 +3,7 @@ from typing import List, Tuple, Optional
 from pathfinding import a_star
 import itertools
 from entities.cell import CellType, Direction
+from core.distribuciones import calc_move_delay
 
 _next_id = itertools.count(1)
 
@@ -31,14 +32,18 @@ class Client:
         self.position = None
         self.move_delay = {'Rapido': 1, 'Normal': 2, 'Tranquilo': 3}[velocidad]
         self._delay_counter = 0
+        self.moving_first_try = True
 
         self.lista: List[Tuple[str, int, Tuple[int, int]]] = []  # (cat, pid, pos)
+        self.lista_len = 0
         self.pos: Optional[Tuple[int, int]] = None
         self.target: Optional[Tuple[int, int]] = None
         self.path: Optional[List[Tuple[int, int]]] = None
         self.shopping_done = False
         self.in_queue = False
         self.time_waited = 0
+        self.checkout_time = 0
+        self.entry_tick = 0
 
     def assign_list(self, store_map):
         products = store_map.get_products()
@@ -56,6 +61,7 @@ class Client:
             num = 1
         picks = random.sample(products, num)
         # products are (cat, id, pos)
+        self.lista_len = len(picks)
         self.lista = picks
 
     def observe_environment(self, store_map):
@@ -154,6 +160,12 @@ class Client:
         Se mueve un paso en la ruta planificada si el siguiente paso está libre.
         Retorna True si se movió.
         """
+
+        if self.moving_first_try:
+            # Se define el move_delay para el movimiento a la siguiente casilla
+            self.move_delay = calc_move_delay(tipo = self.tipo, rapidez=self.velocidad)
+            self.moving_first_try = False
+
         # control de velocidad por ticks
         if self._delay_counter < self.move_delay - 1:
             self._delay_counter += 1
@@ -168,6 +180,7 @@ class Client:
         if moved:
             # consumir paso en path
             self.path.pop(0)
+            self.moving_first_try = True
             return True
         else:
             # si no puede moverse (celda ocupada), intentar re-planificar ocasionalmente

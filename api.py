@@ -168,6 +168,7 @@ def serialize_simulation_state(sim: Simulation):
         start = getattr(c, 'start_tick', None)
         finish = getattr(c, 'finish_tick', None)
         total_time = None
+        checkout_time = getattr(c, 'checkout_time', None)
         if start is not None and finish is not None:
             try:
                 total_time = int(finish - start)
@@ -185,7 +186,8 @@ def serialize_simulation_state(sim: Simulation):
             "in_queue": getattr(c, 'in_queue', False),
             "start_tick": start,
             "finish_tick": finish,
-            "total_time": total_time
+            "total_time": total_time,
+            "checkout_time" : checkout_time
         })
 
     return {
@@ -254,24 +256,47 @@ async def save_gift(payload: dict):
         return {"saved": path}
     except Exception as e:
         return {"error": str(e)}
+    
+
+from core.distribuciones import (
+    clientes_por_hora,
+    calc_client_type,
+    intervalo_entre_clientes,
+    calc_speed,
+    calc_paciencia,
+    noise_caja,
+    calc_move_delay,
+
+)
+import random
 
 @app.websocket("/ws/simulate")
 async def websocket_simulate(websocket: WebSocket):
     await websocket.accept()
+    print(f"🔌 Nueva conexión WebSocket: {websocket.client}")
+
     
     try:
         # Recibir configuración inicial
         config_data = await websocket.receive_text()
         config = json.loads(config_data)
+        print(config)
+        dia = config.get('day', 'lunes')
+        hora = config.get('hour', 10)
 
         # Crear simulación
         store = build_store(config.get('rows', 10), config.get('cols', 12))
         sim = Simulation(store)
 
         # Crear clientes: si el cliente envía una lista 'clients', respetarla; si no, crear aleatorios
-        import random
         clients_conf = config.get('clients') or []
+        arrival_tick = 0
+        clients_num = clientes_por_hora(dia, hora)
+        print(f"Se agregarán {clients_num} clientes")
+
+
         if clients_conf:
+            print("Se agregan según configuración recibida")
             for idx, cconf in enumerate(clients_conf):
                 client = Client(
                     patience=cconf.get('patience', random.uniform(0.5, 0.9)),
@@ -290,22 +315,35 @@ async def websocket_simulate(websocket: WebSocket):
                     client.items_total = len(client.lista)
                 except Exception:
                     client.items_total = 0
-                sim.add_client(client, (0, 0))
+                arrival_tick += intervalo_entre_clientes(lmbda=3)
+                client.entry_tick = arrival_tick
+                sim.clients.append(client)
+                print(sim.clients)
+
+        #SIMULACION ENSERIO SIN NADA "QUEMADO"
         else:
-            for i in range(config.get('num_clients', 5)):
+            print("Se agregan por probabilidades")
+            for i in range(clients_num):
+
+                new_tipo=calc_client_type(dia, hora)
                 client = Client(
-                    patience=random.uniform(0.5, 0.9),
-                    tipo=random.choice(['solo', 'familia']),
-                    velocidad=random.choice(['Rapido', 'Normal', 'Tranquilo'])
+                    patience=calc_paciencia(),
+                    tipo=new_tipo,
+                    velocidad=calc_speed(dia, hora, new_tipo)
                 )
+                client.move_delay = calc_move_delay(client.velocidad, client.tipo)
+
+
                 client.assign_list(store)
                 # record initial total items for metrics
                 try:
                     client.items_total = len(client.lista)
                 except Exception:
                     client.items_total = 0
-                sim.add_client(client, (0, 0))
 
+                arrival_tick += intervalo_entre_clientes(lmbda=3)
+                client.entry_tick = arrival_tick
+                sim.clients.append(client)
         # valores de control
         max_ticks = config.get('max_ticks', 100)
         tick_delay = config.get('tick_delay', 0.5)
@@ -326,6 +364,8 @@ async def websocket_simulate(websocket: WebSocket):
         paused = False
         stopped = False
 
+        pending_clients = sim.clients.copy()
+        print(pending_clients)
         # loop principal: ejecuta ticks cuando no esté en pausa; procesa comandos desde msg_q
         while sim.tick < max_ticks and not sim.all_done() and not stopped:
             # procesar comandos pendientes (no bloqueante)
@@ -358,13 +398,18 @@ async def websocket_simulate(websocket: WebSocket):
             if stopped:
                 break
 
+            entering_now = [c for c in pending_clients if c.entry_tick == sim.tick]
+            for c in entering_now:
+                sim.add_client(c, (0, 0))
+                pending_clients.remove(c)
+
             if not paused:
                 sim.step()
                 state = serialize_simulation_state(sim)
                 # Log client metrics server-side for debugging/inspection
                 try:
                     cm = state.get('client_metrics', [])
-                    print(f"[tick {sim.tick}] client_metrics: {json.dumps(cm, ensure_ascii=False)}")
+                    # print(f"[tick {sim.tick}] client_metrics: {json.dumps(cm, ensure_ascii=False)}")
                 except Exception:
                     pass
                 # Also log a short summary of the console map to confirm it's present
@@ -373,16 +418,17 @@ async def websocket_simulate(websocket: WebSocket):
                     if cmap:
                         lines = cmap.splitlines()
                         snippet = lines[0] if lines else ''
-                        print(f"[tick {sim.tick}] console_map lines={len(lines)} snippet='{snippet[:80]}'")
+                        # print(f"[tick {sim.tick}] console_map lines={len(lines)} snippet='{snippet[:80]}'")
                     else:
-                        print(f"[tick {sim.tick}] console_map: <none>")
+                     #  print(f"[tick {sim.tick}] console_map: <none>")
+                     pass
                 except Exception:
                     pass
                 try:
                     await websocket.send_text(json.dumps(state))
                 except Exception as e:
                     # Client disconnected or send failed; stop the simulation loop
-                    print(f"WebSocket send failed at tick {sim.tick}: {e}")
+                 #  print(f"WebSocket send failed at tick {sim.tick}: {e}")
                     stopped = True
                     break
             else:
@@ -390,7 +436,7 @@ async def websocket_simulate(websocket: WebSocket):
                 state = serialize_simulation_state(sim)
                 try:
                     cm = state.get('client_metrics', [])
-                    print(f"[tick {sim.tick}] client_metrics (paused): {json.dumps(cm, ensure_ascii=False)}")
+                    # print(f"[tick {sim.tick}] client_metrics (paused): {json.dumps(cm, ensure_ascii=False)}")
                 except Exception:
                     pass
                 try:
@@ -398,15 +444,16 @@ async def websocket_simulate(websocket: WebSocket):
                     if cmap:
                         lines = cmap.splitlines()
                         snippet = lines[0] if lines else ''
-                        print(f"[tick {sim.tick}] console_map (paused) lines={len(lines)} snippet='{snippet[:80]}'")
+                        # print(f"[tick {sim.tick}] console_map (paused) lines={len(lines)} snippet='{snippet[:80]}'")
                     else:
-                        print(f"[tick {sim.tick}] console_map (paused): <none>")
+                     #  print(f"[tick {sim.tick}] console_map (paused): <none>")
+                     pass
                 except Exception:
                     pass
                 try:
                     await websocket.send_text(json.dumps(state))
                 except Exception as e:
-                    print(f"WebSocket send failed while paused at tick {sim.tick}: {e}")
+                 #  print(f"WebSocket send failed while paused at tick {sim.tick}: {e}")
                     stopped = True
                     break
 
@@ -424,7 +471,7 @@ async def websocket_simulate(websocket: WebSocket):
                 final_state = serialize_simulation_state(sim)
                 try:
                     cm = final_state.get('client_metrics', [])
-                    print(f"[final tick {sim.tick}] client_metrics: {json.dumps(cm, ensure_ascii=False)}")
+                 #  print(f"[final tick {sim.tick}] client_metrics: {json.dumps(cm, ensure_ascii=False)}")
                 except Exception:
                     pass
                 try:
@@ -432,16 +479,18 @@ async def websocket_simulate(websocket: WebSocket):
                     if cmap:
                         lines = cmap.splitlines()
                         snippet = lines[0] if lines else ''
-                        print(f"[final tick {sim.tick}] console_map lines={len(lines)} snippet='{snippet[:80]}'")
+                     #  print(f"[final tick {sim.tick}] console_map lines={len(lines)} snippet='{snippet[:80]}'")
                     else:
-                        print(f"[final tick {sim.tick}] console_map: <none>")
+                     #  print(f"[final tick {sim.tick}] console_map: <none>")
+                     pass
                 except Exception:
                     pass
                 try:
                     final_state['final'] = True
                     await websocket.send_text(json.dumps(final_state))
                 except Exception as e:
-                    print(f"Final WebSocket send failed: {e}")
+                 #  print(f"Final WebSocket send failed: {e}")
+                 pass
             except Exception:
                 pass
 
@@ -450,6 +499,7 @@ async def websocket_simulate(websocket: WebSocket):
         
     except WebSocketDisconnect:
         print("Cliente desconectado")
+    
     except Exception as e:
         print(f"Error: {e}")
         # Try to close websocket gracefully if still open

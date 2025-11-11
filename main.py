@@ -79,7 +79,6 @@ def run_demo():
     sim.add_client(c1, (0, 0))
     sim.add_client(c2, (0, 0))
     sim.add_client(c3, (0, 0))
-
     sim.run(max_ticks=50, tick_delay=0.1, visualize=True, animate=True, save_animation='store_simulation.gif')
 
 
