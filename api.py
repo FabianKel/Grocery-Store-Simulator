@@ -295,7 +295,7 @@ async def websocket_simulate(websocket: WebSocket):
         print(f"✅ Contador de IDs reseteado a 0")
 
         # Determinar cuántos clientes crear
-        clients_num = config.get('num_clients', None)
+        clients_num = None
         if clients_num is None:
             clients_num = clientes_por_hora(dia, hora)
         
