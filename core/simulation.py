@@ -14,6 +14,8 @@ class Simulation:
         self.max_ticks = 1000
         # Checkout processing speed (clients per ticks) simple model
         self.checkout_service_time = 3  # ticks per customer at checkout
+        from entities.client import Client
+        Client._id_counter = 0
 
         # keep per-checkout timers (position -> remaining time for current client)
         self.checkout_timers = {}
@@ -162,6 +164,9 @@ class Simulation:
           - save_animation: si se provee, guarda la animación en ese archivo (por ejemplo 'sim.gif')
         """
         self.max_ticks = max_ticks
+
+        from entities.client import Client
+        Client._id_counter = 0
 
         frames = []  # lista de matrices de ocupación por tick (floats 0..1)
         labels = None  # etiquetas estáticas (estanterías, cajas, EN/EX)

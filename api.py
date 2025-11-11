@@ -274,81 +274,65 @@ import random
 async def websocket_simulate(websocket: WebSocket):
     await websocket.accept()
     print(f"🔌 Nueva conexión WebSocket: {websocket.client}")
-
     
     try:
         # Recibir configuración inicial
         config_data = await websocket.receive_text()
         config = json.loads(config_data)
-        print(config)
+        print(f"📝 Config recibida: {config}")
+        
         dia = config.get('day', 'lunes')
         hora = config.get('hour', 10)
 
         # Crear simulación
-        store = build_store(config.get('rows', 10), config.get('cols', 12))
+        rows = config.get('rows', 10)
+        cols = config.get('cols', 12)
+        store = build_store(rows=rows, cols=cols)
         sim = Simulation(store)
 
-        # Crear clientes: si el cliente envía una lista 'clients', respetarla; si no, crear aleatorios
-        clients_conf = config.get('clients') or []
+        # RESETEAR CONTADOR DE IDs ANTES DE CREAR CLIENTES
+        Client._id_counter = 0
+        print(f"✅ Contador de IDs reseteado a 0")
+
+        # Determinar cuántos clientes crear
+        clients_num = config.get('num_clients', None)
+        if clients_num is None:
+            clients_num = clientes_por_hora(dia, hora)
+        
+        print(f"👥 Se crearán {clients_num} clientes")
+
+        # SIEMPRE CREAR CLIENTES NUEVOS 
         arrival_tick = 0
-        clients_num = clientes_por_hora(dia, hora)
-        print(f"Se agregarán {clients_num} clientes")
+        pending_clients = []  
+        
+        for i in range(clients_num):
+            new_tipo = calc_client_type(dia, hora)
+            client = Client(
+                patience=calc_paciencia(),
+                tipo=new_tipo,
+                velocidad=calc_speed(dia, hora, new_tipo)
+            )
+            client.move_delay = calc_move_delay(client.tipo, client.velocidad)
+            client.assign_list(store)
+            
+            # Guardar total de items
+            client.items_total = len(client.lista)
+            
+            # Programar llegada
+            arrival_tick += intervalo_entre_clientes(lmbda=3)
+            client.entry_tick = arrival_tick
+            
+            pending_clients.append(client)  # ✅ Agregar a lista temporal, NO a sim.clients
+            print(f"  ✓ Cliente {client.id} creado: tipo={client.tipo}, items={client.items_total}, entrada_tick={arrival_tick}")
 
-
-        if clients_conf:
-            print("Se agregan según configuración recibida")
-            for idx, cconf in enumerate(clients_conf):
-                client = Client(
-                    patience=cconf.get('patience', random.uniform(0.5, 0.9)),
-                    tipo=cconf.get('tipo', random.choice(['solo', 'familia'])),
-                    velocidad=cconf.get('velocidad', random.choice(['Rapido', 'Normal', 'Tranquilo']))
-                )
-                # assign id if provided
-                if 'id' in cconf:
-                    try:
-                        client.id = cconf['id']
-                    except Exception:
-                        pass
-                client.assign_list(store)
-                # record initial total items for metrics
-                try:
-                    client.items_total = len(client.lista)
-                except Exception:
-                    client.items_total = 0
-                arrival_tick += intervalo_entre_clientes(lmbda=3)
-                client.entry_tick = arrival_tick
-                sim.clients.append(client)
-                print(sim.clients)
-
-        #SIMULACION ENSERIO SIN NADA "QUEMADO"
-        else:
-            print("Se agregan por probabilidades")
-            for i in range(clients_num):
-
-                new_tipo=calc_client_type(dia, hora)
-                client = Client(
-                    patience=calc_paciencia(),
-                    tipo=new_tipo,
-                    velocidad=calc_speed(dia, hora, new_tipo)
-                )
-                client.move_delay = calc_move_delay(client.velocidad, client.tipo)
-
-
-                client.assign_list(store)
-                # record initial total items for metrics
-                try:
-                    client.items_total = len(client.lista)
-                except Exception:
-                    client.items_total = 0
-
-                arrival_tick += intervalo_entre_clientes(lmbda=3)
-                client.entry_tick = arrival_tick
-                sim.clients.append(client)
-        # valores de control
+        print(f"📊 Total de clientes programados: {len(pending_clients)}")
+        print(f"🕐 Ticks de entrada: {[c.entry_tick for c in pending_clients]}")
+        
+        # Valores de control
         max_ticks = config.get('max_ticks', 100)
         tick_delay = config.get('tick_delay', 0.5)
 
-        # cola de mensajes entrantes (comandos)
+        # Cola de mensajes entrantes (comandos)
         msg_q: asyncio.Queue = asyncio.Queue()
 
         async def reader():
@@ -364,11 +348,16 @@ async def websocket_simulate(websocket: WebSocket):
         paused = False
         stopped = False
 
-        pending_clients = sim.clients.copy()
-        print(pending_clients)
-        # loop principal: ejecuta ticks cuando no esté en pausa; procesa comandos desde msg_q
-        while sim.tick < max_ticks and not sim.all_done() and not stopped:
-            # procesar comandos pendientes (no bloqueante)
+        # pending_clients ya fue creada arriba con los clientes programados
+        
+        # Loop principal: ejecuta ticks cuando no esté en pausa; procesa comandos desde msg_q
+        while sim.tick < max_ticks and not stopped:
+            # Continuar si hay clientes pendientes de entrar O clientes activos en la simulación
+            if not pending_clients and sim.all_done():
+                print(f"✅ Todos los clientes terminaron en tick {sim.tick}")
+                break
+                
+            # Procesar comandos pendientes (no bloqueante)
             while not msg_q.empty():
                 raw = await msg_q.get()
                 if raw == '__ws_disconnect__':
@@ -385,7 +374,7 @@ async def websocket_simulate(websocket: WebSocket):
                 elif action == 'resume':
                     paused = False
                 elif action == 'step':
-                    # force one step even if paused
+                    # Force one step even if paused
                     paused = True
                     sim.step()
                     state = serialize_simulation_state(sim)
@@ -398,114 +387,67 @@ async def websocket_simulate(websocket: WebSocket):
             if stopped:
                 break
 
+            # Insertar clientes cuyo entry_tick coincide con el tick actual
             entering_now = [c for c in pending_clients if c.entry_tick == sim.tick]
+            if entering_now:
+                print(f"[Tick {sim.tick}] 🚪 {len(entering_now)} cliente(s) entrando ahora")
             for c in entering_now:
                 sim.add_client(c, (0, 0))
                 pending_clients.remove(c)
+                print(f"  → Cliente {c.id} entró al supermercado")
+            
+            # Debug: mostrar pending cada 10 ticks
+            if sim.tick % 10 == 0 and pending_clients:
+                print(f"[Tick {sim.tick}] ⏳ Clientes pendientes: {len(pending_clients)}, próximos ticks: {sorted([c.entry_tick for c in pending_clients[:3]])}")
 
             if not paused:
                 sim.step()
                 state = serialize_simulation_state(sim)
-                # Log client metrics server-side for debugging/inspection
-                try:
-                    cm = state.get('client_metrics', [])
-                    # print(f"[tick {sim.tick}] client_metrics: {json.dumps(cm, ensure_ascii=False)}")
-                except Exception:
-                    pass
-                # Also log a short summary of the console map to confirm it's present
-                try:
-                    cmap = state.get('console_map')
-                    if cmap:
-                        lines = cmap.splitlines()
-                        snippet = lines[0] if lines else ''
-                        # print(f"[tick {sim.tick}] console_map lines={len(lines)} snippet='{snippet[:80]}'")
-                    else:
-                     #  print(f"[tick {sim.tick}] console_map: <none>")
-                     pass
-                except Exception:
-                    pass
+                
                 try:
                     await websocket.send_text(json.dumps(state))
                 except Exception as e:
-                    # Client disconnected or send failed; stop the simulation loop
-                 #  print(f"WebSocket send failed at tick {sim.tick}: {e}")
                     stopped = True
                     break
             else:
-                # still send current state occasionally so UI can show paused tick
+                # Still send current state occasionally so UI can show paused tick
                 state = serialize_simulation_state(sim)
-                try:
-                    cm = state.get('client_metrics', [])
-                    # print(f"[tick {sim.tick}] client_metrics (paused): {json.dumps(cm, ensure_ascii=False)}")
-                except Exception:
-                    pass
-                try:
-                    cmap = state.get('console_map')
-                    if cmap:
-                        lines = cmap.splitlines()
-                        snippet = lines[0] if lines else ''
-                        # print(f"[tick {sim.tick}] console_map (paused) lines={len(lines)} snippet='{snippet[:80]}'")
-                    else:
-                     #  print(f"[tick {sim.tick}] console_map (paused): <none>")
-                     pass
-                except Exception:
-                    pass
                 try:
                     await websocket.send_text(json.dumps(state))
                 except Exception as e:
-                 #  print(f"WebSocket send failed while paused at tick {sim.tick}: {e}")
                     stopped = True
                     break
 
-            # esperar por tick_delay o hasta que haya un comando nuevo
+            # Esperar por tick_delay o hasta que haya un comando nuevo
             try:
                 await asyncio.wait_for(msg_q.get(), timeout=tick_delay)
-                # si hubo un mensaje lo pondremos de nuevo para procesarlo en la siguiente iteración
-                # (ya está vaciado por get), así que continue loop
             except asyncio.TimeoutError:
-                # normal timeout, continuar al siguiente tick
+                # Normal timeout, continuar al siguiente tick
                 pass
 
         # Enviar estado final
-            try:
-                final_state = serialize_simulation_state(sim)
-                try:
-                    cm = final_state.get('client_metrics', [])
-                 #  print(f"[final tick {sim.tick}] client_metrics: {json.dumps(cm, ensure_ascii=False)}")
-                except Exception:
-                    pass
-                try:
-                    cmap = final_state.get('console_map')
-                    if cmap:
-                        lines = cmap.splitlines()
-                        snippet = lines[0] if lines else ''
-                     #  print(f"[final tick {sim.tick}] console_map lines={len(lines)} snippet='{snippet[:80]}'")
-                    else:
-                     #  print(f"[final tick {sim.tick}] console_map: <none>")
-                     pass
-                except Exception:
-                    pass
-                try:
-                    final_state['final'] = True
-                    await websocket.send_text(json.dumps(final_state))
-                except Exception as e:
-                 #  print(f"Final WebSocket send failed: {e}")
-                 pass
-            except Exception:
-                pass
+        try:
+            final_state = serialize_simulation_state(sim)
+            final_state['final'] = True
+            await websocket.send_text(json.dumps(final_state))
+            print(f"✅ Simulación terminada en tick {sim.tick}")
+        except Exception as e:
+            print(f"❌ Error enviando estado final: {e}")
 
-        # cerrar reader task
+        # Cerrar reader task
         reader_task.cancel()
         
     except WebSocketDisconnect:
-        print("Cliente desconectado")
+        print("🔌 Cliente desconectado")
     
     except Exception as e:
-        print(f"Error: {e}")
-        # Try to close websocket gracefully if still open
+        print(f"❌ Error en simulación: {e}")
+        import traceback
+        traceback.print_exc()
         try:
             await websocket.close()
         except Exception:
+            pass
             pass
 
 @app.get("/api/config/defaults")

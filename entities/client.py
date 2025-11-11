@@ -1,11 +1,8 @@
 import random
 from typing import List, Tuple, Optional
 from pathfinding import a_star
-import itertools
 from entities.cell import CellType, Direction
 from core.distribuciones import calc_move_delay
-
-_next_id = itertools.count(1)
 
 
 class Client:
@@ -13,6 +10,11 @@ class Client:
     Agente que se mueve por el mapa, tiene lista de compras y comportamiento simple.
     """
     _id_counter = 0
+
+    @classmethod
+    def reset_counter(cls):
+        """Resetea el contador de IDs a 0"""
+        cls._id_counter = 0
 
     def __init__(self, patience: float, tipo: str, velocidad: str):
         # parametros básicos
@@ -23,7 +25,10 @@ class Client:
         if velocidad not in ['Rapido', 'Normal', 'Tranquilo']:
             raise ValueError("velocidad debe ser 'Rapido', 'Normal' o 'Tranquilo'")
 
-        self.id = next(_next_id)
+        # Incrementar contador y asignar ID
+        Client._id_counter += 1
+        self.id = Client._id_counter
+        
         self.patience = patience
         self.tipo = tipo
         self.velocidad = velocidad
@@ -36,6 +41,7 @@ class Client:
 
         self.lista: List[Tuple[str, int, Tuple[int, int]]] = []  # (cat, pid, pos)
         self.lista_len = 0
+        self.items_total = 0  # Total de items al inicio
         self.pos: Optional[Tuple[int, int]] = None
         self.target: Optional[Tuple[int, int]] = None
         self.path: Optional[List[Tuple[int, int]]] = None
@@ -44,11 +50,14 @@ class Client:
         self.time_waited = 0
         self.checkout_time = 0
         self.entry_tick = 0
+        self.start_tick = None
+        self.finish_tick = None
 
     def assign_list(self, store_map):
         products = store_map.get_products()
         if not products:
             self.lista = []
+            self.items_total = 0
             return
         # número de items basado en tipo
         if self.tipo == 'familia':
@@ -63,6 +72,7 @@ class Client:
         # products are (cat, id, pos)
         self.lista_len = len(picks)
         self.lista = picks
+        self.items_total = len(picks)  # Guardar el total inicial
 
     def observe_environment(self, store_map):
         # información resumida (vecinos y ocupación)
