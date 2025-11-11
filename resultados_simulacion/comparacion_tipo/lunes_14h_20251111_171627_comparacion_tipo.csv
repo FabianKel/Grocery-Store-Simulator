@@ -1,0 +1,7 @@
+checkout_time,finish_tick,id,in_queue,items_left,items_total,patience,shopping_done,start_tick,tipo,total_time,velocidad
+12,208,1,False,0,10,0.27920175145864023,True,1,familia,207,Normal
+5,149,2,False,0,4,0.3839166236022302,True,2,solo,147,Tranquilo
+9,129,3,False,0,8,0.17266012047728957,True,3,solo,126,Normal
+4,71,4,False,0,3,0.09285415213691994,True,4,solo,67,Normal
+6,74,5,False,0,3,0.08132146083600132,True,5,solo,69,Normal
+8,54,6,False,0,5,0.2757229050717738,True,6,solo,48,Rapido

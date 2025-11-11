@@ -1,0 +1,12 @@
+checkout_time,finish_tick,id,in_queue,items_left,items_total,patience,shopping_done,start_tick,tipo,total_time,velocidad
+7,122,1,False,0,5,0.2665280282189972,True,1,solo,121,Normal
+4,65,2,False,0,2,0.21868201005765256,True,2,solo,63,Normal
+10,147,3,False,0,7,0.45978713276024663,True,3,solo,144,Normal
+7,121,4,False,0,6,0.1022904425045606,True,4,solo,117,Normal
+8,71,5,False,0,7,0.22543962314687602,True,5,solo,66,Rapido
+6,47,6,False,0,5,0.4020701532487654,True,6,solo,41,Rapido
+9,161,7,False,0,8,0.4169487782773428,True,7,familia,154,Normal
+11,196,8,False,0,8,0.17503115908737832,True,8,solo,188,Tranquilo
+10,304,9,False,0,9,0.16516608815168607,True,9,familia,295,Tranquilo
+4,75,10,False,0,1,0.2867008783430543,True,10,solo,65,Normal
+7,55,11,False,0,4,0.7473579133714207,True,11,solo,44,Rapido
