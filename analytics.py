@@ -10,7 +10,8 @@ matplotlib.use('Agg')  # Para generar sin display
 import numpy as np
 from typing import List, Dict, Any
 from datetime import datetime
-import os
+import os, csv
+from glob import glob
 
 class SimulationAnalytics:
     """
@@ -27,6 +28,16 @@ class SimulationAnalytics:
         self.output_dir = output_dir
         os.makedirs(output_dir, exist_ok=True)
         
+
+        self.subdirs = {
+            "comparacion_tipo": os.path.join(output_dir, "comparacion_tipo"),
+            "longitud_colas": os.path.join(output_dir, "longitud_colas"),
+            "tiempos_cliente": os.path.join(output_dir, "tiempos_cliente"),
+            "utilizacion_cajeros": os.path.join(output_dir, "utilizacion_cajeros")
+        }
+        for path in self.subdirs.values():
+            os.makedirs(path, exist_ok=True)
+
         # Configuración de estilo
         plt.style.use('seaborn-v0_8-darkgrid')
         self.colors = {
@@ -38,7 +49,7 @@ class SimulationAnalytics:
             'cajero_der': '#e74c3c'   # Rojo
         }
     
-    def save_all_charts(self, simulation_data: Dict[str, Any], prefix: str = ""):
+    def save_all_charts(self, simulation_data: Dict[str, Any], dia: str, hora: int):
         """
         Genera y guarda todas las gráficas.
         
@@ -47,43 +58,64 @@ class SimulationAnalytics:
             prefix: Prefijo para nombres de archivos
         """
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        base_name = f"{prefix}_{timestamp}" if prefix else timestamp
+        prefix = f"{dia}_{hora}h_{timestamp}"
+        # base_name = f"{prefix}_{timestamp}" if prefix else timestamp
         
         print(f"📊 Generando gráficas en {self.output_dir}/...")
         
         # 1. Tiempo total por cliente
         self.plot_client_times(
             simulation_data.get('client_metrics', []),
-            filename=f"{self.output_dir}/{base_name}_tiempos_cliente.png"
+            dia, hora, timestamp
         )
         
         # 2. Utilización de cajeros
         if 'checkout_utilization' in simulation_data:
             self.plot_checkout_utilization(
                 simulation_data['checkout_utilization'],
-                filename=f"{self.output_dir}/{base_name}_utilizacion_cajeros.png"
-            )
+            dia, hora, timestamp
+        )
         
         # 3. Longitud de colas
         if 'queue_lengths' in simulation_data:
             self.plot_queue_lengths(
                 simulation_data['queue_lengths'],
-                filename=f"{self.output_dir}/{base_name}_longitud_colas.png"
+                dia, hora, timestamp
             )
         
         # 4. Comparación por tipo (solo barras, sin boxplot)
         self.plot_time_by_type(
             simulation_data.get('client_metrics', []),
-            filename=f"{self.output_dir}/{base_name}_comparacion_tipo.png"
+            dia, hora, timestamp
         )
+
+        self.generate_combined_charts(timestamp)
+        print(f"✅ Gráficas generadas para {dia} {hora}:00 (timestamp {timestamp})")
+        return timestamp
         
-        print(f"✅ Gráficas guardadas con prefijo: {base_name}")
-        return base_name
-    
-    def plot_client_times(self, client_metrics: List[Dict], filename: str):
+        # print(f"✅ Gráficas guardadas con prefijo: {base_name}")
+        # return base_name
+
+    def save_csv(self, data: List[Dict], filename: str):
+        """Guarda lista de diccionarios en CSV."""
+        if not data:
+            return
+        keys = sorted(data[0].keys())
+        with open(filename, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=keys)
+            writer.writeheader()
+            writer.writerows(data)
+
+    def plot_client_times(self, client_metrics: List[Dict], dia, hora, timestamp):
         """
         Gráfica de barras: tiempo total por cliente.
         """
+
+        path_dir = self.subdirs['tiempos_cliente']
+        filename = os.path.join(path_dir, f"{dia}_{hora}h_{timestamp}_tiempos_cliente.png")
+        csvname = filename.replace(".png", ".csv")
+        self.save_csv(client_metrics, csvname)
+
         # Filtrar clientes que terminaron
         completed = [c for c in client_metrics if c.get('total_time') is not None]
         
@@ -136,7 +168,7 @@ class SimulationAnalytics:
         plt.close()
         print(f"  ✓ {filename}")
     
-    def plot_checkout_utilization(self, utilization_data: Dict, filename: str):
+    def plot_checkout_utilization(self, utilization_data: Dict, dia, hora, timestamp):
         """
         Gráfica de línea: utilización de cajeros en el tiempo.
         MEJORADO: Identifica claramente cajero izquierdo vs derecho
@@ -144,7 +176,18 @@ class SimulationAnalytics:
         if not utilization_data:
             print("⚠️  No hay datos de cajeros")
             return
-            
+        
+        path_dir = self.subdirs['utilizacion_cajeros']
+        filename = os.path.join(path_dir, f"{dia}_{hora}h_{timestamp}_utilizacion_cajeros.png")
+        csvname = filename.replace(".png", ".csv")
+
+        # Aplanar datos para CSV
+        flat_data = []
+        for cid, d in utilization_data.items():
+            for tick, util in zip(d['ticks'], d['utilization']):
+                flat_data.append({'cajero': cid, 'tick': tick, 'utilizacion': util})
+        self.save_csv(flat_data, csvname)
+
         fig, ax = plt.subplots(figsize=(14, 7))
         
         # Ordenar cajeros por columna (izquierda = menor col, derecha = mayor col)
@@ -200,7 +243,7 @@ class SimulationAnalytics:
         plt.close()
         print(f"  ✓ {filename}")
     
-    def plot_queue_lengths(self, queue_data: Dict, filename: str):
+    def plot_queue_lengths(self, queue_data: Dict, dia, hora, timestamp):
         """
         Gráfica de línea: longitud de colas en el tiempo.
         MEJORADO: Identifica claramente cajero izquierdo vs derecho
@@ -208,7 +251,17 @@ class SimulationAnalytics:
         if not queue_data:
             print("⚠️  No hay datos de colas")
             return
-            
+        
+        path_dir = self.subdirs['longitud_colas']
+        filename = os.path.join(path_dir, f"{dia}_{hora}h_{timestamp}_longitud_colas.png")
+        csvname = filename.replace(".png", ".csv")
+
+        flat_data = []
+        for cid, d in queue_data.items():
+            for tick, length in zip(d['ticks'], d['queue_length']):
+                flat_data.append({'cajero': cid, 'tick': tick, 'longitud': length})
+        self.save_csv(flat_data, csvname)
+
         fig, ax = plt.subplots(figsize=(14, 7))
         
         # Ordenar cajeros por columna
@@ -266,11 +319,16 @@ class SimulationAnalytics:
         plt.close()
         print(f"  ✓ {filename}")
     
-    def plot_time_by_type(self, client_metrics: List[Dict], filename: str):
+    def plot_time_by_type(self, client_metrics: List[Dict],dia, hora, timestamp):
         """
         Gráfica de barras: comparación de tiempos por tipo de cliente.
         SIMPLIFICADO: Solo barras con promedios, sin boxplot
         """
+
+        path_dir = self.subdirs['comparacion_tipo']
+        filename = os.path.join(path_dir, f"{dia}_{hora}h_{timestamp}_comparacion_tipo.png")
+        csvname = filename.replace(".png", ".csv")
+        self.save_csv(client_metrics, csvname)
         completed = [c for c in client_metrics if c.get('total_time') is not None]
         
         if not completed:
@@ -337,13 +395,61 @@ class SimulationAnalytics:
                bbox=dict(boxstyle='round,pad=0.8', facecolor='wheat', alpha=0.7, edgecolor='black'))
         
         plt.tight_layout()
-        plt.savefig(filename, dpi=300, bbox_inches='tight')
+        plt.savefig(filename, dpi=300)
         plt.close()
         print(f"  ✓ {filename}")
 
+    def generate_combined_charts(self, timestamp):
+        """
+        Busca gráficas con distinto día/hora pero mismo timestamp y genera una general.
+        """
+        for tipo, path in self.subdirs.items():
+            csvs = glob(os.path.join(path, f"*_{timestamp}_*.csv"))
+            if len(csvs) <= 1:
+                continue
 
+            print(f"🔁 Combinando {len(csvs)} CSVs en {tipo} ({timestamp})...")
+            combined_data = []
+            for csvfile in csvs:
+                with open(csvfile, newline='', encoding='utf-8') as f:
+                    reader = csv.DictReader(f)
+                    combined_data.extend(list(reader))
+
+            # Guardar combinado
+            combined_csv = os.path.join(path, f"{timestamp}_general.csv")
+            self.save_csv(combined_data, combined_csv)
+
+            # Generar gráfica combinada básica
+            fig, ax = plt.subplots(figsize=(10, 6))
+            if tipo == 'comparacion_tipo':
+                tipos = {}
+                for row in combined_data:
+                    tipo_cliente = row.get('tipo', 'desconocido')
+                    if row.get('total_time'):
+                        tipos.setdefault(tipo_cliente, []).append(float(row['total_time']))
+                means = {t: np.mean(v) for t, v in tipos.items()}
+                ax.bar(means.keys(), means.values(), color='gray')
+                ax.set_title(f"Comparación general ({timestamp})")
+            elif tipo == 'longitud_colas':
+                for row in combined_data[:3000]:
+                    ax.scatter(row['tick'], row['longitud'], alpha=0.3)
+                ax.set_title(f"Longitud de colas (general)")
+            elif tipo == 'utilizacion_cajeros':
+                for row in combined_data[:3000]:
+                    ax.scatter(row['tick'], row['utilizacion'], alpha=0.3)
+                ax.set_title(f"Utilización general")
+            elif tipo == 'tiempos_cliente':
+                if 'total_time' in combined_data[0]:
+                    times = [float(r['total_time']) for r in combined_data if r.get('total_time')]
+                    ax.hist(times, bins=20, color='gray', alpha=0.7)
+                    ax.set_title(f"Distribución de tiempos cliente (general)")
+            plt.tight_layout()
+            plt.savefig(os.path.join(path, f"{timestamp}_general.png"), dpi=300)
+            plt.close()
+            print(f"  ✅ {tipo}: general combinada generada")
+            
 # Función auxiliar para usar desde la API
-def generate_charts_from_simulation(sim, output_dir="simulation_results", prefix="sim"):
+def generate_charts_from_simulation(sim, dia, hora, output_dir="simulation_results"):
     """
     Genera todas las gráficas desde un objeto Simulation.
     
@@ -355,15 +461,20 @@ def generate_charts_from_simulation(sim, output_dir="simulation_results", prefix
     Returns:
         str: Nombre base de los archivos generados
     """
+    from api import serialize_simulation_state
     analytics = SimulationAnalytics(output_dir=output_dir)
-    
+    state = serialize_simulation_state(sim)
+
     # Recopilar datos
-    simulation_data = collect_simulation_data(sim)
+    data = {
+        'client_metrics': state.get('client_metrics', []),
+        'stats': state.get('stats', {}),
+        'checkout_utilization': state.get('checkout_utilization', {}),
+        'queue_lengths': state.get('queue_lengths', {})
+    }
     
     # Generar gráficas
-    base_name = analytics.save_all_charts(simulation_data, prefix=prefix)
-    
-    return base_name
+    return analytics.save_all_charts(data, dia, hora)
 
 
 def collect_simulation_data(sim) -> Dict[str, Any]:

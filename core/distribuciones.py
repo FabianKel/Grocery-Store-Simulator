@@ -62,7 +62,7 @@ def calc_speed(dia: str, hora: int, tipo: str) -> str:
     Retorna 'Rapido', 'Normal' o 'Tranquilo' basado en contexto.
     """
     if tipo == "familia":
-        probs = {"Rapido": 0.1, "Normal": 0.5, "Tranquilo": 0.4}
+        probs = {"Rapido": 0.1, "Normal": 0.5, "Tranquilo": 0.2}
     else:
         probs = {"Rapido": 0.4, "Normal": 0.5, "Tranquilo": 0.1}
 
@@ -110,7 +110,7 @@ def calc_move_delay(tipo: str, rapidez: str) -> int:
     base_ranges = {
         "Rapido":   (1, 2),
         "Normal":   (2, 4),
-        "Tranquilo":(5, 6)
+        "Tranquilo":(4, 5)
     }
 
     low, high = base_ranges.get(rapidez, (2, 4))

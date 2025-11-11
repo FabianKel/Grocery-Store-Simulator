@@ -39,8 +39,8 @@ function startSimulation() {
         num_clients: parseInt(document.getElementById('num_clients').value),
         tick_delay: parseFloat(document.getElementById('tick_delay').value),
         max_ticks: parseInt(document.getElementById('max_ticks').value),
-        day: "viernes",
-        hour: 10
+        day: document.getElementById('dia').value,
+        hour: parseInt(document.getElementById('hora').value)
     };
     // attach custom clients if provided
     if (localClients.length > 0) config.clients = localClients;

@@ -442,7 +442,7 @@ async def websocket_simulate(websocket: WebSocket):
             
             # Generar gráficas
             analytics = SimulationAnalytics(output_dir="resultados_simulacion")
-            base_name = analytics.save_all_charts(simulation_data, prefix=f"{dia}_{hora}h")
+            base_name = analytics.save_all_charts(simulation_data, dia=dia, hora=hora)
             
             print(f"✅ Gráficas guardadas en: resultados_simulacion/{base_name}_*.png")
             
