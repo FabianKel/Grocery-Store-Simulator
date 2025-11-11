@@ -164,23 +164,68 @@ class StoreMap:
                     products.append((c.category, c.product_id, (i, j)))
         return products
 
-    def find_nearest_checkout(self, row: int, col: int) -> Optional[Tuple[int, int]]:
+    #def find_nearest_checkout(self, row: int, col: int) -> Optional[Tuple[int, int]]:
         # busca celda CHECKOUT más cercana (BFS simple)
-        from collections import deque
-        visited = set()
-        q = deque([(row, col)])
-        while q:
-            r, c = q.popleft()
-            if (r, c) in visited:
-                continue
-            visited.add((r, c))
-            cell = self.get_cell(r, c)
-            if cell.type == CellType.CHECKOUT:
-                return (r, c)
-            for n in self.get_neighbors(r, c):
-                if n not in visited:
-                    q.append(n)
-        return None
+        #from collections import deque
+        #visited = set()
+        #q = deque([(row, col)])
+        #while q:
+            #r, c = q.popleft()
+            #if (r, c) in visited:
+                #continue
+            #visited.add((r, c))
+            #cell = self.get_cell(r, c)
+            #if cell.type == CellType.CHECKOUT:
+                #return (r, c)
+            #for n in self.get_neighbors(r, c):
+                #if n not in visited:
+                    #q.append(n)
+        #return None
+
+    def find_best_checkout(self, row: int, col: int) -> Optional[Tuple[int, int]]:
+        """
+        Encuentra el mejor cajero considerando:
+        - Gente en fila
+        - Gente caminando hacia ese cajero
+        - Distancia
+        """
+        checkouts = []
+        
+        # Obtener todos los clientes del mapa
+        all_clients = []
+        for i in range(self.rows):
+            for j in range(self.cols):
+                all_clients.extend(self.get_cell(i, j).clients)
+        
+        for i in range(self.rows):
+            for j in range(self.cols):
+                cell = self.get_cell(i, j)
+                if cell.type == CellType.CHECKOUT:
+                    queue_length = len(cell.queue)
+                    
+                    # Contar clientes que van hacia este cajero
+                    clients_heading_here = sum(
+                        1 for c in all_clients 
+                        if (hasattr(c, 'target') and 
+                            c.target == (i, j) and 
+                            not getattr(c, 'in_queue', False))
+                    )
+                    
+                    # Carga total = en fila + en camino
+                    total_load = queue_length + clients_heading_here
+                    distance = abs(i - row) + abs(j - col)
+                    
+                    checkouts.append((total_load, distance, (i, j)))
+        
+        if not checkouts:
+            return None
+        
+        checkouts.sort(key=lambda x: (x[0], x[1]))
+        
+        print(f"[StoreMap] Mejor cajero en {checkouts[0][2]}: "
+            f"carga_total={checkouts[0][0]}, distancia={checkouts[0][1]}")
+        
+        return checkouts[0][2]
 
     def get_map_status(self) -> dict:
         """

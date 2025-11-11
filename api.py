@@ -424,7 +424,33 @@ async def websocket_simulate(websocket: WebSocket):
             except asyncio.TimeoutError:
                 # Normal timeout, continuar al siguiente tick
                 pass
-
+        try:
+            print("📊 Generando gráficas...")
+            from analytics import SimulationAnalytics
+            
+            # Recopilar datos
+            analytics_data = sim.get_analytics_data()
+            final_state_temp = serialize_simulation_state(sim)
+            
+            simulation_data = {
+                'client_metrics': final_state_temp.get('client_metrics', []),
+                'stats': final_state_temp.get('stats', {}),
+                'checkout_utilization': analytics_data.get('checkout_utilization', {}),
+                'queue_lengths': analytics_data.get('queue_lengths', {}),
+                'occupancy_history': analytics_data.get('occupancy_history', [])
+            }
+            
+            # Generar gráficas
+            analytics = SimulationAnalytics(output_dir="resultados_simulacion")
+            base_name = analytics.save_all_charts(simulation_data, prefix=f"{dia}_{hora}h")
+            
+            print(f"✅ Gráficas guardadas en: resultados_simulacion/{base_name}_*.png")
+            
+        except Exception as e:
+            print(f"❌ Error generando gráficas: {e}")
+            import traceback
+            traceback.print_exc()
+            
         # Enviar estado final
         try:
             final_state = serialize_simulation_state(sim)

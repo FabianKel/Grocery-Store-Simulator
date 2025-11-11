@@ -19,6 +19,9 @@ class Simulation:
 
         # keep per-checkout timers (position -> remaining time for current client)
         self.checkout_timers = {}
+        self.checkout_utilization_history = {}
+        self.queue_length_history = {}
+        self.occupancy_history = []
 
         # Para que entren con tiempo de por medio
         self.arrival_schedule: List[Tuple[int, Client]] = []  # (tick, client)
@@ -133,6 +136,7 @@ class Simulation:
                         self.checkout_timers[key] = timer
 
         # 3. increment global tick
+        self._collect_metrics()
         self.tick += 1
         
     def _find_exit_or_entrance(self):
@@ -150,6 +154,70 @@ class Simulation:
     def all_done(self):
         # todos los clientes finished?
         return all(getattr(c, "shopping_done", False) for c in self.clients)
+    
+    def _collect_metrics(self):
+        """
+        Recopila métricas en cada tick para análisis posterior.
+        """
+        # Utilización y longitud de colas por cajero
+        for i in range(self.map.rows):
+            for j in range(self.map.cols):
+                cell = self.map.get_cell(i, j)
+                if cell.type == CellType.CHECKOUT:
+                    key = (i, j)
+                    
+                    # Inicializar si no existe
+                    if key not in self.checkout_utilization_history:
+                        self.checkout_utilization_history[key] = {
+                            'ticks': [],
+                            'utilization': []
+                        }
+                    if key not in self.queue_length_history:
+                        self.queue_length_history[key] = {
+                            'ticks': [],
+                            'queue_length': []
+                        }
+                    
+                    # Registrar utilización (1 si hay alguien siendo atendido, 0 si no)
+                    is_busy = 1 if key in self.checkout_timers and self.checkout_timers[key] > 0 else 0
+                    self.checkout_utilization_history[key]['ticks'].append(self.tick)
+                    self.checkout_utilization_history[key]['utilization'].append(is_busy)
+                    
+                    # Registrar longitud de cola
+                    self.queue_length_history[key]['ticks'].append(self.tick)
+                    self.queue_length_history[key]['queue_length'].append(len(cell.queue))
+        
+        # Guardar matriz de ocupación actual
+        occupancy_matrix = []
+        for i in range(self.map.rows):
+            row = []
+            for j in range(self.map.cols):
+                cell = self.map.get_cell(i, j)
+                # Contar clientes en la celda (normalizado por capacidad)
+                if cell.capacity > 0:
+                    occupancy = len(cell.clients) / cell.capacity
+                else:
+                    occupancy = 1.0 if cell.clients else 0.0
+                row.append(occupancy)
+            occupancy_matrix.append(row)
+        
+        self.occupancy_history.append(occupancy_matrix)
+
+    def get_analytics_data(self):
+        """
+        Retorna todos los datos recopilados para analytics.
+        """
+        return {
+            'checkout_utilization': {
+                f"Cajero_{i}_{j}": data 
+                for (i, j), data in self.checkout_utilization_history.items()
+            },
+            'queue_lengths': {
+                f"Cajero_{i}_{j}": data 
+                for (i, j), data in self.queue_length_history.items()
+            },
+            'occupancy_history': self.occupancy_history
+        }
 
     def run(self, max_ticks: int = 500, tick_delay: float = 0.1, visualize: bool = True,
             animate: bool = False, save_animation: Optional[str] = None):

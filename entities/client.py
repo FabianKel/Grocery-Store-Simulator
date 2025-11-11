@@ -85,7 +85,7 @@ class Client:
         # si tiene lista, elegir el producto más cercano (por Manhattan) entre los que quedan
         if not self.lista:
             # si no hay lista, objetivo: checkout nearest
-            chk = store_map.find_nearest_checkout(*self.pos)
+            chk = store_map.find_best_checkout(*self.pos)
             self.target = chk
             return self.target
         # elegir el producto en lista más cercano
@@ -253,6 +253,28 @@ class Client:
             print(f"[Client {self.id}] chose target={self.target}")
             self.plan_path(store_map)
 
+        # Reevaluación de cajero basada en paciencia
+        # Si va hacia un cajero y no está en fila, considerar cambiar de opinión
+        if self.target and not self.in_queue:
+            target_cell = store_map.get_cell(*self.target)
+            if target_cell and target_cell.type == CellType.CHECKOUT:
+                # Clientes impacientes (patience < 0.5) reevalúan con más frecuencia
+                reevaluate_prob = (1 - self.patience) * 0.3  # Max 30% de prob por tick
+                
+                if random.random() < reevaluate_prob:
+                    new_chk = store_map.find_best_checkout(*self.pos)
+                    
+                    # Solo cambiar si el nuevo cajero es significativamente mejor
+                    if new_chk and new_chk != self.target:
+                        current_load = len(store_map.get_cell(*self.target).queue)
+                        new_load = len(store_map.get_cell(*new_chk).queue)
+                        
+                        # Cambiar si el nuevo tiene al menos 2 personas menos
+                        if new_load < current_load - 1:
+                            self.target = new_chk
+                            self.plan_path(store_map)
+                            print(f"[Client {self.id}] cambió de cajero (paciencia={self.patience:.2f})")
+
         # if arrived at target
         if self.target == self.pos:
             # if shelf -> attempt purchase
@@ -265,7 +287,7 @@ class Client:
                     self.path = None
                     if not self.lista:
                         # go to checkout
-                        chk = store_map.find_nearest_checkout(*self.pos)
+                        chk = store_map.find_best_checkout(*self.pos)
                         self.target = chk
                         self.plan_path(store_map)
                     return
@@ -281,7 +303,7 @@ class Client:
                     self.target = None
                     self.path = None
                     if not self.lista:
-                        chk = store_map.find_nearest_checkout(*self.pos)
+                        chk = store_map.find_best_checkout(*self.pos)
                         self.target = chk
                         self.plan_path(store_map)
                     return
