@@ -89,8 +89,15 @@ class SimulationAnalytics:
             dia, hora, timestamp
         )
 
-        self.generate_combined_charts(timestamp)
+        # self.generate_combined_charts(timestamp)
+
+        #combiner = ChartCombiner(self.subdirs, save_csv_func=self.save_csv)
+        #combiner.generate_day_hour_comparisons()
+        from analytics2 import run_combined_plots, BASE_RESULTS_DIR
+        run_combined_plots(BASE_RESULTS_DIR)
+
         print(f"✅ Gráficas generadas para {dia} {hora}:00 (timestamp {timestamp})")
+
         return timestamp
         
         # print(f"✅ Gráficas guardadas con prefijo: {base_name}")
@@ -399,54 +406,6 @@ class SimulationAnalytics:
         plt.close()
         print(f"  ✓ {filename}")
 
-    def generate_combined_charts(self, timestamp):
-        """
-        Busca gráficas con distinto día/hora pero mismo timestamp y genera una general.
-        """
-        for tipo, path in self.subdirs.items():
-            csvs = glob(os.path.join(path, f"*_{timestamp}_*.csv"))
-            if len(csvs) <= 1:
-                continue
-
-            print(f"🔁 Combinando {len(csvs)} CSVs en {tipo} ({timestamp})...")
-            combined_data = []
-            for csvfile in csvs:
-                with open(csvfile, newline='', encoding='utf-8') as f:
-                    reader = csv.DictReader(f)
-                    combined_data.extend(list(reader))
-
-            # Guardar combinado
-            combined_csv = os.path.join(path, f"{timestamp}_general.csv")
-            self.save_csv(combined_data, combined_csv)
-
-            # Generar gráfica combinada básica
-            fig, ax = plt.subplots(figsize=(10, 6))
-            if tipo == 'comparacion_tipo':
-                tipos = {}
-                for row in combined_data:
-                    tipo_cliente = row.get('tipo', 'desconocido')
-                    if row.get('total_time'):
-                        tipos.setdefault(tipo_cliente, []).append(float(row['total_time']))
-                means = {t: np.mean(v) for t, v in tipos.items()}
-                ax.bar(means.keys(), means.values(), color='gray')
-                ax.set_title(f"Comparación general ({timestamp})")
-            elif tipo == 'longitud_colas':
-                for row in combined_data[:3000]:
-                    ax.scatter(row['tick'], row['longitud'], alpha=0.3)
-                ax.set_title(f"Longitud de colas (general)")
-            elif tipo == 'utilizacion_cajeros':
-                for row in combined_data[:3000]:
-                    ax.scatter(row['tick'], row['utilizacion'], alpha=0.3)
-                ax.set_title(f"Utilización general")
-            elif tipo == 'tiempos_cliente':
-                if 'total_time' in combined_data[0]:
-                    times = [float(r['total_time']) for r in combined_data if r.get('total_time')]
-                    ax.hist(times, bins=20, color='gray', alpha=0.7)
-                    ax.set_title(f"Distribución de tiempos cliente (general)")
-            plt.tight_layout()
-            plt.savefig(os.path.join(path, f"{timestamp}_general.png"), dpi=300)
-            plt.close()
-            print(f"  ✅ {tipo}: general combinada generada")
             
 # Función auxiliar para usar desde la API
 def generate_charts_from_simulation(sim, dia, hora, output_dir="simulation_results"):
